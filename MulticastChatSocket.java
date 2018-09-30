@@ -70,9 +70,11 @@ public class MulticastChatSocket extends MulticastSocket {
         synchronized (sendDatagramPacket) {
             sendDatagramPacket.setAddress(multicastAddress);
             sendDatagramPacket.setPort(getLocalPort());
+
             byte[] data = packet.toByteArray();
             sendDatagramPacket.setData(data);
             sendDatagramPacket.setLength(data.length);
+
             send(sendDatagramPacket);
         }
     }

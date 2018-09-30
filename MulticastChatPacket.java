@@ -1,4 +1,3 @@
-import javax.xml.stream.events.StartDocument;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -33,8 +32,8 @@ import java.time.LocalDateTime;
  * Created on 2018-09-28
  */
 public class MulticastChatPacket {
-    // Packet max length: 388 or 772 bytes
     public static final int MAX_STRING_FIELD_SIZE = 127;
+    // Packet max length: 388 or 772 bytes
     public static final int MAX_PACKET_SIZE = 388;
     private static final Charset CHARSET = StandardCharsets.ISO_8859_1;
     private static final int CURRENT_PROTOCOL_VERSION = 1;
