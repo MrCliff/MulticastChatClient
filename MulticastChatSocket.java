@@ -54,7 +54,7 @@ public class MulticastChatSocket extends MulticastSocket {
     public MulticastChatPacket receiveChatPacket() throws IOException {
         synchronized (receiveDatagramPacket) {
             byte[] data;
-            receive(receiveDatagramPacket); // TODO: Check if this blocking statement is bad inside a synchronized method.
+            receive(receiveDatagramPacket);
             data = receiveDatagramPacket.getData();
             return new MulticastChatPacket(data);
         }
