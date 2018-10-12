@@ -36,29 +36,85 @@ public class MulticastChatClient {
     private static final String QUIT_REGEX = "(?i)quit|q";
     private static final int SOCKET_SO_TIMEOUT = 100;
 
-    private static String multicastAddress;
-    private static int port;
-    private static String userName;
-    private static LocalDate birthDate;
+    private static MulticastChatReceiver receiver;
+    private static MulticastChatSender sender;
+
+    private String multicastAddress;
+    private int port;
+    private User user;
+    private UserList userList = new UserListImpl();
+
+    public void setMulticastAddress(String multicastAddress) {
+        this.multicastAddress = multicastAddress;
+    }
+
+    public void setPort(int port) {
+        this.port = port;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
+    }
+
+    public String getMulticastAddress() {
+        return multicastAddress;
+    }
+
+    public int getPort() {
+        return port;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    /**
+     * A factory for {@link MulticastChatSender}.
+     *
+     * @param socket the socket for the sender.
+     * @return new {@link MulticastChatSender} instance.
+     */
+    private MulticastChatSender createChatSender(MulticastChatSocket socket) {
+        return new MulticastChatSender(socket);
+    }
+
+    /**
+     * A factory for {@link MulticastChatReceiver}.
+     *
+     * @param socket the socket for the receiver.
+     * @return new {@link MulticastChatReceiver} instance.
+     */
+    private MulticastChatReceiver createChatReceiver(MulticastChatSocket socket) {
+        return new MulticastChatReceiver(socket);
+    }
+
+    /**
+     * Closes all open threads.
+     */
+    public void close() {
+        userList.close();
+    }
 
     public static void main(String[] args) {
-        parseArgs(args);
+        MulticastChatClient client = parseArgs(args);
 
         try {
-            InetAddress inetAddress = InetAddress.getByName(multicastAddress);
-            try (MulticastChatSocket socket = new MulticastChatSocket(port, inetAddress)) {
+            InetAddress inetAddress = InetAddress.getByName(client.getMulticastAddress());
+            try (MulticastChatSocket socket = new MulticastChatSocket(client.getPort(), inetAddress)) {
                 socket.joinGroup(inetAddress);
                 socket.setSoTimeout(SOCKET_SO_TIMEOUT);
 
-                MulticastChatReceiver receiver = new MulticastChatReceiver(socket);
+                receiver = client.createChatReceiver(socket);
                 receiver.start();
 
-                MulticastChatSender sender = new MulticastChatSender(socket);
+                sender = client.createChatSender(socket);
                 sender.start();
 
                 sender.join();
                 receiver.stopReceiving();
                 receiver.join();
+
+                client.close();
 
                 socket.leaveGroup(inetAddress);
             }
@@ -71,11 +127,17 @@ public class MulticastChatClient {
         }
     }
 
-    private static void parseArgs(String[] args) {
-        multicastAddress = DEFAULT_MULTICAST_ADDRESS;
-        port = DEFAULT_PORT;
-        userName = DEFAULT_USER_NAME;
-        birthDate = DEFAULT_BIRTH_DATE;
+    /**
+     * Parses the given arguments and constructs a new chat client using them.
+     *
+     * @param args the arguments to parse.
+     * @return new {@link MulticastChatClient} instance.
+     */
+    private static MulticastChatClient parseArgs(String[] args) {
+        String multicastAddress = DEFAULT_MULTICAST_ADDRESS;
+        int port = DEFAULT_PORT;
+        String userName = DEFAULT_USER_NAME;
+        LocalDate birthDate = DEFAULT_BIRTH_DATE;
 
         if (args.length >= 1) {
             multicastAddress = args[0];
@@ -89,23 +151,40 @@ public class MulticastChatClient {
         if (args.length >= 3) {
             userName = args[2];
         }
+
         if (args.length >= 4) {
             try {
                 int year = Integer.parseInt(args[3]);
-                int month = Integer.parseInt(args[4]);
-                int day = Integer.parseInt(args[5]);
+
+                int month = birthDate.getMonthValue();
+                int day = birthDate.getDayOfMonth();
+
+                if (args.length >= 5) {
+                    month = Integer.parseInt(args[4]);
+                }
+                if (args.length >= 6) {
+                    day = Integer.parseInt(args[5]);
+                }
 
                 birthDate = LocalDate.of(year, month, day);
             }
             catch (NumberFormatException ignore) { }
         }
+
+        MulticastChatClient client = new MulticastChatClient();
+        client.setUser(new User(userName, birthDate));
+        client.setMulticastAddress(multicastAddress);
+        client.setPort(port);
+
+        return client;
     }
 
     /**
      * A thread that listens to System.in for messages and packages them into
      * multicast chat packets and then sends them to the MulticastChatSocket.
      */
-    public static class MulticastChatSender extends Thread {
+    public class MulticastChatSender extends Thread {
+        private static final String PROMPT_MESSAGE = "Write a message (q = quit) > ";
         private static final int ERROR_SLEEP_MILLISECONDS = 1000;
         private MulticastChatSocket socket;
 
@@ -133,6 +212,7 @@ public class MulticastChatClient {
                         }
                     }
 
+                    // Quit
                     if (message.matches(QUIT_REGEX)) break;
 
                     send(MulticastChatPacket.PacketType.MESSAGE, message);
@@ -153,7 +233,34 @@ public class MulticastChatClient {
          */
         private void send(MulticastChatPacket.PacketType packetType, String message) {
             MulticastChatPacket packet = new MulticastChatPacket(
-                    packetType, birthDate, CLIENT_NAME, userName, message
+                    packetType, user.getBirthDate(), CLIENT_NAME, user.getUserName(), message
+            );
+
+            try {
+                socket.sendChatPacket(packet);
+
+                switch (packetType) {
+                    case JOIN:
+                        userList.addDistinct(user);
+                        break;
+                }
+            }
+            catch (IOException ex) {
+                System.err.println("Packet sending failed:");
+                ex.printStackTrace();
+            }
+        }
+
+        /**
+         * Sends the update message of the user list.
+         */
+        public void sendUserListUpdate() {
+            MulticastChatPacket packet = new MulticastChatPacket(
+                    MulticastChatPacket.PacketType.USER_LIST_UPDATE,
+                    user.getBirthDate(),
+                    CLIENT_NAME,
+                    user.getUserName(),
+                    userList.asCollection()
             );
 
             try {
@@ -164,20 +271,13 @@ public class MulticastChatClient {
                 ex.printStackTrace();
             }
         }
-
-        /**
-         * Updates the write message in System.out.
-         */
-        public static void updatePrompt() {
-            System.out.println("Write a message (q = quit) > ");
-        }
     }
 
     /**
      * A thread that listens to arriving multicast chat packets, reads them and
      * prints them to System.out.
      */
-    public static class MulticastChatReceiver extends Thread {
+    public class MulticastChatReceiver extends Thread {
         private static final int ERROR_SLEEP_MILLISECONDS = 1000;
         private MulticastChatSocket socket;
         private boolean canStop = false;
@@ -205,6 +305,9 @@ public class MulticastChatClient {
                             System.out.println();
                             handleMessage(packet);
                             break;
+                        case USER_LIST_UPDATE:
+                            handleUserListUpdate(packet);
+                            break;
                         case UNKNOWN_PACKET_TYPE:
                             continue;
                         default:
@@ -217,7 +320,7 @@ public class MulticastChatClient {
 
                     // Don't write the "Write a message" message to screen, if we are quiting.
                     if (!canStop) {
-                        MulticastChatSender.updatePrompt();
+                        System.out.println(MulticastChatSender.PROMPT_MESSAGE);
                     }
                 }
                 catch (SocketTimeoutException ignore) {
@@ -259,6 +362,13 @@ public class MulticastChatClient {
                     packet.getProtocolVersion()
             );
             System.out.println(outputStr);
+
+            User joinedUser = packet.getUser();
+
+            // Only send list update, if the join message comes from a new user.
+            if (userList.addDistinct(joinedUser)) {
+                userList.scheduleListUpdate(() -> sender.sendUserListUpdate());
+            }
         }
 
         /**
@@ -275,6 +385,11 @@ public class MulticastChatClient {
                     packet.getProtocolVersion()
             );
             System.out.println(outputStr);
+
+            User leftUser = packet.getUser();
+            userList.removeByName(leftUser);
+
+            System.out.println(getUserListUpdateMessage());
         }
 
         /**
@@ -290,6 +405,35 @@ public class MulticastChatClient {
                     packet.getMessage()
             );
             System.out.println(outputStr);
+        }
+
+        /**
+         * Handles user list update packet.
+         *
+         * @param packet the packet to handle.
+         */
+        private void handleUserListUpdate(MulticastChatPacket packet) {
+            userList.cancelListUpdate();
+
+            if (userList.getNumberOfUsers() <= 1) {
+                userList.addAllDistinct(packet.getUsers());
+            }
+
+            // Print user list
+            System.out.println(getUserListUpdateMessage());
+        }
+
+        /**
+         * Formats the user list to a nice update message.
+         *
+         * @return the formatted update message of the user list.
+         */
+        private String getUserListUpdateMessage() {
+            String userListStr = userList.toString();
+            return String.format(
+                    "Paikalla olevat käyttäjät: %s",
+                    userListStr
+            );
         }
     }
 }

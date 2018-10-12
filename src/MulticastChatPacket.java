@@ -1,7 +1,10 @@
+import com.sun.istack.internal.NotNull;
+
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.*;
 
 /**
  * A multicast chat data packet, that corresponds to the multicast chat
@@ -36,7 +39,7 @@ public class MulticastChatPacket {
     // Packet max length: 388 or 772 bytes
     public static final int MAX_PACKET_SIZE = 388;
     private static final Charset CHARSET = StandardCharsets.ISO_8859_1;
-    private static final int CURRENT_PROTOCOL_VERSION = 1;
+    private static final int CURRENT_PROTOCOL_VERSION = 2;
 
     private final int protocolVersion;
     private final PacketType packetType;
@@ -45,6 +48,8 @@ public class MulticastChatPacket {
     private final String userName;
     private final String message;
     private final LocalDateTime packetReceiveTime;
+
+    private final Collection<User> users;
 
     /**
      * Parses the multicast chat packet from the given byte array using the bit
@@ -72,6 +77,8 @@ public class MulticastChatPacket {
         int messageLength = data[messageOffset];
         message = new String(data, messageOffset + 1, messageLength, CHARSET);
 
+        users = parseUsers(packetType, message);
+
         packetReceiveTime = LocalDateTime.now();
     }
 
@@ -94,8 +101,101 @@ public class MulticastChatPacket {
         this.clientName = clientName;
         this.userName = userName;
         this.message = message;
+        this.users = parseUsers(packetType, message);
 
         packetReceiveTime = LocalDateTime.now();
+    }
+
+    /**
+     * Initializes a {@link MulticastChatPacket} using the given information.
+     *
+     * @param packetType the type of this packet.
+     * @param birthDate  the birth date of the user.
+     * @param clientName the name of the client application used to create and
+     *                   send this packet.
+     * @param userName   the name of the user using the client application.
+     * @param users      the collection of users to send, if the packet is of
+     *                   type {@link PacketType#USER_LIST_UPDATE}.
+     */
+    public MulticastChatPacket(PacketType packetType, LocalDate birthDate, String clientName, String userName,
+                               @NotNull Collection<User> users) {
+        protocolVersion = CURRENT_PROTOCOL_VERSION;
+
+        this.packetType = packetType;
+        this.birthDate = birthDate;
+        this.clientName = clientName;
+        this.userName = userName;
+        this.users = new ArrayList<>(users);
+        this.message = formatUsersForMessage(packetType, this.users);
+
+        packetReceiveTime = LocalDateTime.now();
+    }
+
+    /**
+     * Parses users from the given message, if it's needed for the given packet
+     * type.
+     *
+     * @param packetType the type of the packet.
+     * @param message    the message of the packet from which to parse the
+     *                   users.
+     * @return collection of parsed users.
+     */
+    private Collection<User> parseUsers(PacketType packetType, String message) {
+        if (packetType != PacketType.USER_LIST_UPDATE) {
+            return null;
+        }
+
+        byte[] bytes = message.getBytes(CHARSET);
+        Collection<User> users = new LinkedList<>();
+
+        int i = 0;
+        while (i < bytes.length) {
+            int nameOffset = i + 1;
+            int nameLength = bytes[i] & 0xFF;
+            // Make sure the name length doesn't overpass the length of the
+            // byte array.
+            nameLength = Math.min(nameLength, bytes.length - nameOffset);
+
+            String name = new String(bytes, nameOffset, nameLength, CHARSET);
+            users.add(new User(name));
+
+            i = nameOffset + nameLength;
+        }
+        return users;
+    }
+
+    /**
+     * Formats the given users into a message format, if it's needed for the
+     * given packet type.
+     *
+     * @param packetType the type of the packet.
+     * @param users      the user collection of the packet. This collection is
+     *                   used to form the message.
+     * @return packet message, that's formatted for the given packet type.
+     */
+    private String formatUsersForMessage(PacketType packetType, Collection<User> users) {
+        if (packetType != PacketType.USER_LIST_UPDATE) {
+            return "";
+        }
+
+//        users.stream().map(User::getUserName)
+
+//        users.stream().map(user -> {
+//           String name = user.getUserName();
+//        });
+
+        StringBuilder sb = new StringBuilder();
+//        List<Byte> bytes = new LinkedList<>();
+        for (User user : users) {
+            String name = user.getUserName();
+            byte nameLength = (byte)(name.length() & 0xFF);
+            sb.append(new String(new byte[] {nameLength}, CHARSET));
+            sb.append(name);
+//            bytes.add(nameLength);
+//            List<Byte> nameBytes = Arrays.stream(name.getBytes(CHARSET));
+//            bytes.addAll();
+        }
+        return sb.toString();
     }
 
     /**
@@ -194,6 +294,14 @@ public class MulticastChatPacket {
         return message;
     }
 
+    public Iterable<User> getUsers() {
+        return users;
+    }
+
+    public User getUser() {
+        return new User(getUserName(), getBirthDate());
+    }
+
     public LocalDateTime getPacketReceiveTime() {
         return packetReceiveTime;
     }
@@ -205,7 +313,8 @@ public class MulticastChatPacket {
         UNKNOWN_PACKET_TYPE(-1),
         JOIN(1),
         LEAVE(2),
-        MESSAGE(3);
+        MESSAGE(3),
+        USER_LIST_UPDATE(4);
 
         private int id;
 
