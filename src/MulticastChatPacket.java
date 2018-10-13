@@ -1,5 +1,3 @@
-import com.sun.istack.internal.NotNull;
-
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -118,7 +116,7 @@ public class MulticastChatPacket {
      *                   type {@link PacketType#USER_LIST_UPDATE}.
      */
     public MulticastChatPacket(PacketType packetType, LocalDate birthDate, String clientName, String userName,
-                               @NotNull Collection<User> users) {
+                               Collection<User> users) {
         protocolVersion = CURRENT_PROTOCOL_VERSION;
 
         this.packetType = packetType;
