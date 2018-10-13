@@ -22,7 +22,7 @@ public class MulticastChatSocket extends MulticastSocket {
      * @throws IOException       if an I/O exception occurs
      *                           while creating the MulticastSocket
      * @throws SecurityException if a security manager exists and its
-     *                           {@code checkListen} method doesn't allow the
+     *                           {@link SecurityManager#checkListen} method doesn't allow the
      *                           operation.
      * @see SecurityManager#checkListen
      */
@@ -37,7 +37,7 @@ public class MulticastChatSocket extends MulticastSocket {
      * @throws IOException       if an I/O exception occurs
      *                           while creating the MulticastSocket
      * @throws SecurityException if a security manager exists and its
-     *                           {@code checkListen} method doesn't allow the
+     *                           {@link SecurityManager#checkListen} method doesn't allow the
      *                           operation.
      * @see SecurityManager#checkListen
      */

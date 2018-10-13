@@ -49,7 +49,7 @@ public class MulticastChatPacket {
     /**
      * Parses the multicast chat packet from the given byte array using the bit
      * order of the multicast chat protocol. (Packet structure described in
-     * {@code MulticastChatPacket}.)
+     * {@link MulticastChatPacket}.)
      *
      * @param data the multicast chat packet as byte array.
      * @see MulticastChatPacket
@@ -76,7 +76,7 @@ public class MulticastChatPacket {
     }
 
     /**
-     * Initializes a {@code MulticastChatPacket} using the given information.
+     * Initializes a {@link MulticastChatPacket} using the given information.
      *
      * @param packetType the type of this packet.
      * @param birthDate  the birth date of the user.
@@ -110,7 +110,7 @@ public class MulticastChatPacket {
      * </pre>
      *
      * @param dateBits an integer that includes the birthDate.
-     * @return the parsed birthDate as a {@code Calendar} object.
+     * @return the parsed birthDate as a {@link LocalDate} object.
      */
     private LocalDate parseBirthDateBits(int dateBits) {
         int day = dateBits >>> 19 & 0x1F;
@@ -121,7 +121,7 @@ public class MulticastChatPacket {
     }
 
     /**
-     * Converts this {@code MulticastChatPacket} to a byte array that follows
+     * Converts this {@link MulticastChatPacket} to a byte array that follows
      * the multicast chat protocol.
      *
      * @return byte array of data that follows the multicast chat protocol.
@@ -202,6 +202,7 @@ public class MulticastChatPacket {
      * The types of multicast chat protocol packet.
      */
     public enum PacketType {
+        UNKNOWN_PACKET_TYPE(-1),
         JOIN(1),
         LEAVE(2),
         MESSAGE(3);
@@ -229,7 +230,7 @@ public class MulticastChatPacket {
                 if (packetType.id == id) return packetType;
             }
 
-            throw new IllegalArgumentException(String.format("No packet type specified with id: %d", id));
+            return UNKNOWN_PACKET_TYPE;
         }
     }
 }

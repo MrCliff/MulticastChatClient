@@ -13,7 +13,8 @@ import java.time.format.FormatStyle;
  * A chat client that uses multicast.
  * <br />
  * Usage:
- * java MulticastChatClient [Multicast address] [Multicast port] [Username] [Birth date year] [Birth date month] [Birth date day]
+ * java MulticastChatClient [Multicast address] [Multicast port] [Username] [Birth date year] [Birth date month]
+ * [Birth date day]
  * <br />
  * Example:
  * java MulticastChatClient 239.0.0.1 6666 "Test user" 1990 1 1
@@ -168,7 +169,7 @@ public class MulticastChatClient {
          * Updates the write message in System.out.
          */
         public static void updatePrompt() {
-            System.out.print("Write a message (q = quit) > ");
+            System.out.println("Write a message (q = quit) > ");
         }
     }
 
@@ -190,18 +191,22 @@ public class MulticastChatClient {
             while (!canStop) {
                 try {
                     MulticastChatPacket packet = socket.receiveChatPacket();
-                    System.out.println();
 
                     switch (packet.getPacketType()) {
                         case JOIN:
+                            System.out.println();
                             handleJoin(packet);
                             break;
                         case LEAVE:
+                            System.out.println();
                             handleLeave(packet);
                             break;
                         case MESSAGE:
+                            System.out.println();
                             handleMessage(packet);
                             break;
+                        case UNKNOWN_PACKET_TYPE:
+                            continue;
                         default:
                             System.err.println(String.format(
                                     "Unknown protocol message type: %d, Protocol version: %d",
